@@ -1,0 +1,10 @@
+torch>=2.0.0
+torchvision>=0.15.0
+easydict
+numpy
+Pillow
+opencv-python
+decord
+tqdm
+mediapipe
+
