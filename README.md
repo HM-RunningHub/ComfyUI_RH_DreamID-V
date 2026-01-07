@@ -55,11 +55,16 @@ pip install -r requirements.txt
 
 ## 📦 Model Downloads & Configuration
 
-This plugin requires the following model files:
+This plugin requires the following model files (refer to [Official Model Preparation Guide](https://github.com/bytedance/DreamID-V#model-preparation)):
+
+| Models | Download Link | Notes |
+|--------|---------------|-------|
+| DreamID-V | 🤗 [Huggingface](https://huggingface.co/XuGuo699/DreamID-V) | Supports 480P & 720P |
+| Wan-2.1 | 🤗 [Huggingface](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | VAE & Text encoder |
 
 ### 1. Wan2.1-T2V-1.3B Base Model
 
-Download from: [Hugging Face - Wan2.1-T2V-1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B)
+Download from: 🤗 [Huggingface - Wan2.1-T2V-1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B)
 
 Place the files in the following directory:
 ```
@@ -71,7 +76,7 @@ ComfyUI/models/Wan/Wan2.1-T2V-1.3B/
 
 ### 2. DreamID-V Model
 
-Download from: [Hugging Face - DreamID-V](https://huggingface.co/bytedance/DreamID-V) or [GitHub Release](https://github.com/bytedance/DreamID-V/releases)
+Download from: 🤗 [Huggingface - DreamID-V](https://huggingface.co/XuGuo699/DreamID-V)
 
 Place the file in the following directory:
 ```

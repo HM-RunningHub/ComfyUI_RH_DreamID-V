@@ -55,11 +55,16 @@ pip install -r requirements.txt
 
 ## 📦 模型下载与配置
 
-本插件需要下载以下模型文件：
+本插件需要下载以下模型文件（参考 [官方模型准备指南](https://github.com/bytedance/DreamID-V#model-preparation)）：
+
+| 模型 | 下载链接 | 说明 |
+|------|----------|------|
+| DreamID-V | 🤗 [Huggingface](https://huggingface.co/XuGuo699/DreamID-V) | 支持 480P 和 720P |
+| Wan-2.1 | 🤗 [Huggingface](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | VAE 和文本编码器 |
 
 ### 1. Wan2.1-T2V-1.3B 基础模型
 
-下载地址：[Hugging Face - Wan2.1-T2V-1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B)
+下载地址：🤗 [Huggingface - Wan2.1-T2V-1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B)
 
 下载后放置到以下目录：
 ```
@@ -71,7 +76,7 @@ ComfyUI/models/Wan/Wan2.1-T2V-1.3B/
 
 ### 2. DreamID-V 模型
 
-下载地址：[Hugging Face - DreamID-V](https://huggingface.co/bytedance/DreamID-V) 或 [GitHub Release](https://github.com/bytedance/DreamID-V/releases)
+下载地址：🤗 [Huggingface - DreamID-V](https://huggingface.co/XuGuo699/DreamID-V)
 
 下载后放置到以下目录：
 ```
