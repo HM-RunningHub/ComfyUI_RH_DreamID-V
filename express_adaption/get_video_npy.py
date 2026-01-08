@@ -48,16 +48,18 @@ except ImportError as e:
 lmk_extractor = LMKExtractor(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 vis = FaceMeshVisualizer(forehead_edge=False)
 
-def prehandle_video(video_path, save_path, fps=24, debug=False, min_detection_confidence=0.3, use_insightface=True):
+def prehandle_video(video_path, save_path=None, fps=24, debug=False, min_detection_confidence=0.3, use_insightface=True):
     """
-    Preprocess video: detect faces and save face detection results.
+    Detect faces in video and return face detection results.
     For frames without detectable faces, use the previous frame's result (interpolation).
-    This ensures output video has the same frame count as input.
+    
+    NOTE: This function NO LONGER re-encodes the video. The original video is used directly.
+    The save_path parameter is kept for backward compatibility but ignored.
     
     Args:
         video_path: Path to input video
-        save_path: Path to save processed video (same frame count as input)
-        fps: Frames per second
+        save_path: DEPRECATED - kept for backward compatibility, ignored
+        fps: Frames per second (not used, kept for backward compatibility)
         debug: Enable debug logging
         min_detection_confidence: Face detection threshold (0.1-1.0, lower = more detections)
         use_insightface: Use InsightFace + MediaPipe hybrid detection (better for difficult videos)
@@ -84,17 +86,6 @@ def prehandle_video(video_path, save_path, fps=24, debug=False, min_detection_co
         print(f"[prehandle_video] Using MediaPipe detector (threshold: {min_detection_confidence})")
     
     frames = imageio.get_reader(video_path)
-    meta = frames.get_meta_data()
-
-    # size = meta.get('size')
-    codec = meta.get('codec', 'libx264')
-    writer = imageio.get_writer(
-        save_path, 
-        fps=fps, 
-        codec=codec, 
-        macro_block_size=1,
-        quality=10
-    )
     
     face_results = []  # Store face results for ALL frames
     interpolated_frames = []  # Track frames that used interpolation
@@ -135,9 +126,6 @@ def prehandle_video(video_path, save_path, fps=24, debug=False, min_detection_co
                 face_result = None
         
         face_results.append(face_result)
-        writer.append_data(frame)
-    
-    writer.close()
     
     # Second pass: fill any None results at the beginning with the first valid result
     first_valid_idx = None

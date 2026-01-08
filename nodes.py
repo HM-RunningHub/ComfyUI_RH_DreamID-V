@@ -300,18 +300,16 @@ class RunningHub_DreamID_V_Sampler:
         print(pipeline.config)
         sample_steps = kwargs.get('sample_steps')
         self.pbar = comfy.utils.ProgressBar(sample_steps + 1)
-        # ref_video_path = kwargs.get('video').get_stream_source()
-        video_path = kwargs.get('video').get_stream_source()
-        ref_video_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.mp4')
+        # Use original video directly (no re-encoding to preserve quality)
+        ref_video_path = kwargs.get('video').get_stream_source()
         fps = kwargs.get('fps')
         # Get face detection threshold (default 0.3)
         face_detection_threshold = kwargs.get('face_detection_threshold', 0.3)
         print(f'[DreamID-V] Using face detection threshold: {face_detection_threshold}')
-        # Prehandle video: detect faces and get face detection results
+        # Detect faces in video (no re-encoding, uses original video)
         # For frames without faces, use interpolation from previous frames
-        # This ensures video frame count stays consistent
         interpolated_frames, face_results = prehandle_video(
-            video_path, ref_video_path, fps=fps, debug=True, 
+            ref_video_path, debug=True, 
             min_detection_confidence=face_detection_threshold,
             use_insightface=True
         )
@@ -374,8 +372,7 @@ class RunningHub_DreamID_V_Sampler:
         output_filename = f"dreamidv_{uuid.uuid4()}.mp4"
         output_path = os.path.join(output_dir, output_filename)
         
-        # self.create_video_with_audio(frames, fps, ref_video_path, output_path)
-        self.create_video_with_audio(frames, fps, video_path, output_path)
+        self.create_video_with_audio(frames, fps, ref_video_path, output_path)
         
         # Create VIDEO object
         video_obj = self.create_video_object(output_path)
@@ -430,15 +427,14 @@ class RunningHub_DreamID_V_Sampler_Test:
 
         sample_steps = kwargs.get('sample_steps')
         self.pbar = comfy.utils.ProgressBar(sample_steps + 1)
-        # ref_video_path = kwargs.get('video').get_stream_source()
-        video_path = kwargs.get('video').get_stream_source()
-        ref_video_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.mp4')
+        # Use original video directly (no re-encoding)
+        ref_video_path = kwargs.get('video').get_stream_source()
         # Get face detection threshold (default 0.3)
         face_detection_threshold = kwargs.get('face_detection_threshold', 0.3)
         print(f'[DreamID-V Test] Using face detection threshold: {face_detection_threshold}')
-        # Prehandle video with interpolation for frames without faces
+        # Detect faces in video (no re-encoding)
         interpolated_frames, face_results = prehandle_video(
-            video_path, ref_video_path, fps=fps, debug=True,
+            ref_video_path, debug=True,
             min_detection_confidence=face_detection_threshold,
             use_insightface=True
         )
