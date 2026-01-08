@@ -116,14 +116,29 @@ class InsightFaceDetector:
             img_bgr: BGR image (OpenCV format)
             
         Returns:
-            List of face bounding boxes [(x1, y1, x2, y2), ...]
+            List of tuples [(bbox, score, area), ...] where bbox is (x1, y1, x2, y2)
         """
+        h, w = img_bgr.shape[:2]
         faces = self.app.get(img_bgr)
-        bboxes = []
+        results = []
         for face in faces:
             bbox = face.bbox.astype(int)
-            bboxes.append(bbox)
-        return bboxes
+            x1, y1, x2, y2 = bbox
+            
+            # Filter out invalid bboxes (negative coords or out of bounds)
+            if x1 < 0 or y1 < 0 or x2 > w or y2 > h:
+                continue
+            
+            # Filter out too small faces
+            face_w, face_h = x2 - x1, y2 - y1
+            if face_w < 30 or face_h < 30:
+                continue
+            
+            area = face_w * face_h
+            score = face.det_score if hasattr(face, 'det_score') else 1.0
+            results.append((bbox, score, area))
+        
+        return results
 
 
 class HybridLMKExtractor:
@@ -264,48 +279,48 @@ class HybridLMKExtractor:
         
         # Try InsightFace detection first
         if self.use_insightface:
-            bboxes = self.insightface_detector.detect(img_bgr)
+            detections = self.insightface_detector.detect(img_bgr)
             
-            if len(bboxes) == 0:
+            if len(detections) == 0:
                 if debug:
-                    print(f"[HybridLMKExtractor] InsightFace: no face detected")
+                    print(f"[HybridLMKExtractor] InsightFace: no valid face detected, trying MediaPipe")
                 # Fall back to MediaPipe direct detection
                 return self._extract_landmarks_mediapipe(img_bgr, debug)
             
-            if len(bboxes) > 1:
+            # Sort by score * area (prefer confident large faces)
+            # Score weight is higher to prefer confident detections
+            detections.sort(key=lambda x: x[1] * 2 + x[2] / (w * h), reverse=True)
+            
+            if debug and len(detections) > 1:
+                print(f"[HybridLMKExtractor] InsightFace: {len(detections)} valid faces, using best")
+            
+            # Try faces in order of quality until one works with MediaPipe
+            for bbox, score, area in detections[:3]:  # Try top 3 candidates
+                cropped, offset, crop_size = self._crop_and_pad_face(img_bgr, bbox)
+                
                 if debug:
-                    print(f"[HybridLMKExtractor] InsightFace: {len(bboxes)} faces, using largest")
-                # Use the largest face
-                areas = [(b[2]-b[0]) * (b[3]-b[1]) for b in bboxes]
-                bboxes = [bboxes[np.argmax(areas)]]
+                    print(f"[HybridLMKExtractor] Trying face at {bbox.tolist()}, score={score:.2f}, size={crop_size}")
+                
+                # Run MediaPipe on cropped image
+                result = self._extract_landmarks_mediapipe(cropped, debug=False)
+                
+                if result is not None:
+                    # Map landmarks back to original image coordinates
+                    crop_h, crop_w = cropped.shape[:2]
+                    ox, oy = offset
+                    
+                    # lmks are normalized [0,1], need to map to original image
+                    lmks = result['lmks'].copy()
+                    lmks[:, 0] = (lmks[:, 0] * crop_w + ox) / w
+                    lmks[:, 1] = (lmks[:, 1] * crop_h + oy) / h
+                    result['lmks'] = lmks
+                    
+                    return result
             
-            # Crop face region and run MediaPipe
-            bbox = bboxes[0]
-            cropped, offset, crop_size = self._crop_and_pad_face(img_bgr, bbox)
-            
+            # All InsightFace candidates failed, try full image MediaPipe
             if debug:
-                print(f"[HybridLMKExtractor] InsightFace detected face at {bbox}, cropped to {crop_size}")
-            
-            # Run MediaPipe on cropped image
-            result = self._extract_landmarks_mediapipe(cropped, debug)
-            
-            if result is not None:
-                # Map landmarks back to original image coordinates
-                crop_h, crop_w = cropped.shape[:2]
-                ox, oy = offset
-                
-                # lmks are normalized [0,1], need to map to original image
-                lmks = result['lmks'].copy()
-                lmks[:, 0] = (lmks[:, 0] * crop_w + ox) / w
-                lmks[:, 1] = (lmks[:, 1] * crop_h + oy) / h
-                result['lmks'] = lmks
-                
-                return result
-            else:
-                if debug:
-                    print(f"[HybridLMKExtractor] MediaPipe failed on cropped face, trying full image")
-                # Fall back to full image
-                return self._extract_landmarks_mediapipe(img_bgr, debug)
+                print(f"[HybridLMKExtractor] All InsightFace candidates failed, trying full image MediaPipe")
+            return self._extract_landmarks_mediapipe(img_bgr, debug)
         else:
             # MediaPipe only mode
             return self._extract_landmarks_mediapipe(img_bgr, debug)
