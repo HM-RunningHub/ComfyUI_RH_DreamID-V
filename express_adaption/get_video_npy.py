@@ -50,20 +50,21 @@ vis = FaceMeshVisualizer(forehead_edge=False)
 
 def prehandle_video(video_path, save_path, fps=24, debug=False, min_detection_confidence=0.3, use_insightface=True):
     """
-    Preprocess video: filter frames with detectable faces and save face detection results.
+    Preprocess video: detect faces and save face detection results.
+    For frames without detectable faces, use the previous frame's result (interpolation).
+    This ensures output video has the same frame count as input.
     
     Args:
         video_path: Path to input video
-        save_path: Path to save filtered video
+        save_path: Path to save processed video (same frame count as input)
         fps: Frames per second
         debug: Enable debug logging
         min_detection_confidence: Face detection threshold (0.1-1.0, lower = more detections)
         use_insightface: Use InsightFace + MediaPipe hybrid detection (better for difficult videos)
     
     Returns:
-        skip_frames_index: list of frame indices that were skipped (no face detected)
-        skip_frames_data: dict mapping frame index to frame data
-        face_results: list of face detection results for frames with faces
+        interpolated_frames: list of frame indices that used interpolated face results
+        face_results: list of face detection results for ALL frames (with interpolation)
     """
     # Create extractor with custom threshold
     if use_insightface and HYBRID_AVAILABLE:
@@ -94,10 +95,12 @@ def prehandle_video(video_path, save_path, fps=24, debug=False, min_detection_co
         macro_block_size=1,
         quality=10
     )
-    skip_frames_index = []
-    skip_frames_data = {}
-    face_results = []  # Store face results to avoid re-detection
+    
+    face_results = []  # Store face results for ALL frames
+    interpolated_frames = []  # Track frames that used interpolation
+    last_valid_result = None  # Store last valid face result for interpolation
     total_frames = 0
+    detected_count = 0
     
     # Only enable debug for first few frames to avoid log spam
     debug_limit = 10 if debug else 0
@@ -110,23 +113,49 @@ def prehandle_video(video_path, save_path, fps=24, debug=False, min_detection_co
         enable_debug = debug and i < debug_limit
         face_result = extractor(frame_bgr, debug=enable_debug)
         
-        if face_result is None:
-            skip_frames_index.append(i)
-            skip_frames_data[i] = frame
-            continue
+        if face_result is not None:
+            # Valid detection
+            face_result['width'] = frame_bgr.shape[1]
+            face_result['height'] = frame_bgr.shape[0]
+            last_valid_result = face_result
+            detected_count += 1
+        else:
+            # No face detected - use interpolation
+            if last_valid_result is not None:
+                # Use the last valid result (with updated dimensions)
+                face_result = last_valid_result.copy()
+                face_result['width'] = frame_bgr.shape[1]
+                face_result['height'] = frame_bgr.shape[0]
+                interpolated_frames.append(i)
+            else:
+                # No previous result available - skip this frame and try next
+                # This should rarely happen (only at the start if first frames have no face)
+                interpolated_frames.append(i)
+                # Create a placeholder that will be filled later
+                face_result = None
         
-        # Save face result with frame dimensions
-        face_result['width'] = frame_bgr.shape[1]
-        face_result['height'] = frame_bgr.shape[0]
         face_results.append(face_result)
-        
         writer.append_data(frame)
+    
     writer.close()
     
-    detected_count = total_frames - len(skip_frames_index)
-    print(f"[prehandle_video] Total frames: {total_frames}, detected faces: {detected_count}, skipped: {len(skip_frames_index)}")
+    # Second pass: fill any None results at the beginning with the first valid result
+    first_valid_idx = None
+    for i, result in enumerate(face_results):
+        if result is not None:
+            first_valid_idx = i
+            break
     
-    return skip_frames_index, skip_frames_data, face_results
+    if first_valid_idx is not None and first_valid_idx > 0:
+        for i in range(first_valid_idx):
+            face_results[i] = face_results[first_valid_idx].copy()
+    
+    # Ensure no None results remain
+    face_results = [r for r in face_results if r is not None]
+    
+    print(f"[prehandle_video] Total frames: {total_frames}, detected faces: {detected_count}, interpolated: {len(interpolated_frames)}")
+    
+    return interpolated_frames, face_results
 
 def get_video_npy(video_path):
     """

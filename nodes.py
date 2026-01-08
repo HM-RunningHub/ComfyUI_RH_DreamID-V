@@ -304,17 +304,18 @@ class RunningHub_DreamID_V_Sampler:
         video_path = kwargs.get('video').get_stream_source()
         ref_video_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.mp4')
         fps = kwargs.get('fps')
-        # Get face detection threshold (default 0.5)
+        # Get face detection threshold (default 0.3)
         face_detection_threshold = kwargs.get('face_detection_threshold', 0.3)
         print(f'[DreamID-V] Using face detection threshold: {face_detection_threshold}')
-        # Prehandle video: filter frames with faces and get face detection results
-        # Always use InsightFace + MediaPipe hybrid detection for better results
-        skip_frames_index, skip_frames_data, face_results = prehandle_video(
+        # Prehandle video: detect faces and get face detection results
+        # For frames without faces, use interpolation from previous frames
+        # This ensures video frame count stays consistent
+        interpolated_frames, face_results = prehandle_video(
             video_path, ref_video_path, fps=fps, debug=True, 
             min_detection_confidence=face_detection_threshold,
             use_insightface=True
         )
-        print(f'skip_frames_index count: {len(skip_frames_index)}, face_results count: {len(face_results)}')
+        print(f'[DreamID-V] interpolated_frames count: {len(interpolated_frames)}, face_results count: {len(face_results)}')
         
         ref_image = self.tensor_2_pil(kwargs.get('ref_image'))
         ref_image_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.png')
@@ -365,16 +366,7 @@ class RunningHub_DreamID_V_Sampler:
         
         # Convert to frames tensor (N, H, W, C) with values in [0, 1]
         frames = (generated.clamp(-1, 1).cpu().permute(1, 2, 3, 0) + 1.0) / 2.0
-        print(frames.shape)
-
-        frames_list = list(torch.unbind(frames, dim=0))
-        target_w, target_h = frames.shape[2], frames.shape[1]
-        for i in skip_frames_index:
-            if i < frame_num:
-                frames_list.insert(i, self.frame_2_tensor(skip_frames_data[i], target_w, target_h))
-        frames_list = frames_list[:frame_num]
-        frames = torch.stack(frames_list, dim=0)
-        # print(frames.shape)
+        print(f'[DreamID-V] Output frames shape: {frames.shape}')
         
         # Create output video with audio from source
         fps = kwargs.get('fps')
@@ -441,16 +433,16 @@ class RunningHub_DreamID_V_Sampler_Test:
         # ref_video_path = kwargs.get('video').get_stream_source()
         video_path = kwargs.get('video').get_stream_source()
         ref_video_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.mp4')
-        # Get face detection threshold (default 0.5)
+        # Get face detection threshold (default 0.3)
         face_detection_threshold = kwargs.get('face_detection_threshold', 0.3)
         print(f'[DreamID-V Test] Using face detection threshold: {face_detection_threshold}')
-        # Always use InsightFace + MediaPipe hybrid detection
-        skip_frames_index, skip_frames_data, face_results = prehandle_video(
+        # Prehandle video with interpolation for frames without faces
+        interpolated_frames, face_results = prehandle_video(
             video_path, ref_video_path, fps=fps, debug=True,
             min_detection_confidence=face_detection_threshold,
             use_insightface=True
         )
-        print(f'skip_frames_index count: {len(skip_frames_index)}, face_results count: {len(face_results)}')
+        print(f'[DreamID-V Test] interpolated_frames count: {len(interpolated_frames)}, face_results count: {len(face_results)}')
         
         ref_image = self.tensor_2_pil(kwargs.get('ref_image'))
         ref_image_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.png')
@@ -461,16 +453,10 @@ class RunningHub_DreamID_V_Sampler_Test:
         frames = imageio.get_reader(ref_video_path)
         images = []
         for i, frame in enumerate(frames):
-            print(frame.shape)
             image = torch.from_numpy(np.array(frame).astype(np.float32) / 255.0)
             images.append(image)
         images = torch.stack(images)
-        print(images.shape)
-        frames_list = list(torch.unbind(images, dim=0))
-        for i in skip_frames_index:
-            print(skip_frames_data[i].shape)
-            frames_list.insert(i, torch.from_numpy(np.array(skip_frames_data[i]).astype(np.float32) / 255.0))
-        images = torch.stack(frames_list, dim=0)
+        print(f'[DreamID-V Test] Output images shape: {images.shape}')
 
         return (images, )
 
