@@ -171,6 +171,7 @@ class RunningHub_DreamID_V_Sampler:
                 "custom_width": ("INT", {"default": 832, "min": 64, "max": 2048, "step": 8}),
                 "custom_height": ("INT", {"default": 480, "min": 64, "max": 2048, "step": 8}),
                 "face_detection_threshold": ("FLOAT", {"default": 0.5, "min": 0.1, "max": 1.0, "step": 0.05}),
+                "use_insightface": ("BOOLEAN", {"default": False}),
             }
         }
 
@@ -306,11 +307,13 @@ class RunningHub_DreamID_V_Sampler:
         fps = kwargs.get('fps')
         # Get face detection threshold (default 0.5)
         face_detection_threshold = kwargs.get('face_detection_threshold', 0.5)
-        print(f'[DreamID-V] Using face detection threshold: {face_detection_threshold}')
+        use_insightface = kwargs.get('use_insightface', False)
+        print(f'[DreamID-V] Using face detection threshold: {face_detection_threshold}, InsightFace: {use_insightface}')
         # Prehandle video: filter frames with faces and get face detection results
         skip_frames_index, skip_frames_data, face_results = prehandle_video(
             video_path, ref_video_path, fps=fps, debug=True, 
-            min_detection_confidence=face_detection_threshold
+            min_detection_confidence=face_detection_threshold,
+            use_insightface=use_insightface
         )
         print(f'skip_frames_index count: {len(skip_frames_index)}, face_results count: {len(face_results)}')
         
@@ -411,6 +414,7 @@ class RunningHub_DreamID_V_Sampler_Test:
                 "custom_width": ("INT", {"default": 832, "min": 64, "max": 2048, "step": 8}),
                 "custom_height": ("INT", {"default": 480, "min": 64, "max": 2048, "step": 8}),
                 "face_detection_threshold": ("FLOAT", {"default": 0.5, "min": 0.1, "max": 1.0, "step": 0.05}),
+                "use_insightface": ("BOOLEAN", {"default": False}),
             }
         }
 
@@ -439,8 +443,16 @@ class RunningHub_DreamID_V_Sampler_Test:
         # ref_video_path = kwargs.get('video').get_stream_source()
         video_path = kwargs.get('video').get_stream_source()
         ref_video_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.mp4')
-        skip_frames_index, skip_frames_data = prehandle_video(video_path, ref_video_path, fps)
-        print(f'skip_frames_index: {skip_frames_index}')
+        # Get face detection parameters
+        face_detection_threshold = kwargs.get('face_detection_threshold', 0.5)
+        use_insightface = kwargs.get('use_insightface', False)
+        print(f'[DreamID-V Test] Using face detection threshold: {face_detection_threshold}, InsightFace: {use_insightface}')
+        skip_frames_index, skip_frames_data, face_results = prehandle_video(
+            video_path, ref_video_path, fps=fps, debug=True,
+            min_detection_confidence=face_detection_threshold,
+            use_insightface=use_insightface
+        )
+        print(f'skip_frames_index count: {len(skip_frames_index)}, face_results count: {len(face_results)}')
         
         ref_image = self.tensor_2_pil(kwargs.get('ref_image'))
         ref_image_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.png')
