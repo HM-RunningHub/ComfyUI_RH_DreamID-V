@@ -3207,7 +3207,7 @@ class FaceLandmarker(base_vision_task_api.BaseVisionTaskApi):
     })
 
     if output_packets[_NORM_LANDMARKS_STREAM_NAME].is_empty():
-      return FaceLandmarkerResult([], [], []), None
+      return FaceLandmarkerResult([], [], [])
 
     return _build_landmarker_result2(output_packets)
 
@@ -3252,7 +3252,7 @@ class FaceLandmarker(base_vision_task_api.BaseVisionTaskApi):
     })
 
     if output_packets[_NORM_LANDMARKS_STREAM_NAME].is_empty():
-      return FaceLandmarkerResult([], [], []), None
+      return FaceLandmarkerResult([], [], [])
 
     return _build_landmarker_result2(output_packets)
 

@@ -33,24 +33,15 @@ import folder_paths
 
 class LMKExtractor():
     def __init__(self, FPS=25):
-        """
-        Initialize face landmark extractor.
-        Uses MediaPipe default thresholds to match original project behavior.
-        
-        Args:
-            FPS: Frames per second for video mode
-        """
         # Create an FaceLandmarker object.
         self.mode = mp.tasks.vision.FaceDetectorOptions.running_mode.IMAGE
         base_options = python.BaseOptions(model_asset_path=os.path.join(CUR_DIR, 'mp_models/face_landmarker_v2_with_blendshapes.task'))
         base_options.delegate = mp.tasks.BaseOptions.Delegate.CPU
-        options = vision.FaceLandmarkerOptions(
-            base_options=base_options,
-            running_mode=self.mode,
-            output_face_blendshapes=True,
-            output_facial_transformation_matrixes=True,
-            num_faces=1
-        )
+        options = vision.FaceLandmarkerOptions(base_options=base_options,
+                                            running_mode=self.mode,
+                                            output_face_blendshapes=True,
+                                            output_facial_transformation_matrixes=True,
+                                            num_faces=1)
         self.detector = face_landmark.FaceLandmarker.create_from_options(options)
         self.last_ts = 0
         self.frame_ms = int(1000 / FPS)
@@ -67,17 +58,7 @@ class LMKExtractor():
         self.handler.prepare(ctx_id=0, det_size=(640, 640))
                 
 
-    def __call__(self, img, debug=False):
-        """
-        Extract face landmarks from image.
-        
-        Args:
-            img: BGR image (OpenCV format)
-            debug: Enable debug logging (optional, for compatibility)
-            
-        Returns:
-            dict with lmks, lmks3d, trans_mat, faces, bs or None if no face
-        """
+    def __call__(self, img):
         frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
         t0 = time.time()
@@ -94,6 +75,10 @@ class LMKExtractor():
             except:
                 return None
         elif self.mode == mp.tasks.vision.FaceDetectorOptions.running_mode.IMAGE:
+            # det_result = self.det_detector.detect(image)
+
+            # if len(det_result.detections) != 1:
+            #     return None
             try:
                 detection_result, mesh3d = self.detector.detect(image)
             except:

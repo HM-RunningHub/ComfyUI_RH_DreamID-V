@@ -29,75 +29,29 @@ from IPython.display import display, Image as IPyImage
 import torchvision.transforms as T
 
 import sys
-from .media_pipe.mp_utils import LMKExtractor
+from .media_pipe.mp_utils  import LMKExtractor
 from .media_pipe.draw_util import FaceMeshVisualizer
 from .media_pipe.pose_util import project_points_with_trans, matrix_to_euler_and_translation, euler_and_translation_to_matrix
 
-# Try to import hybrid detector (InsightFace + MediaPipe)
-HYBRID_AVAILABLE = False
-try:
-    from .media_pipe.face_detector_hybrid import HybridLMKExtractor, INSIGHTFACE_AVAILABLE
-    HYBRID_AVAILABLE = INSIGHTFACE_AVAILABLE
-    if HYBRID_AVAILABLE:
-        print("[get_video_npy] InsightFace hybrid detector available")
-except ImportError as e:
-    print(f"[get_video_npy] Hybrid detector not available: {e}")
-
-# Default global extractor for backward compatibility (used by get_video_npy)
-# Uses default threshold of 0.5
-lmk_extractor = LMKExtractor(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+lmk_extractor = LMKExtractor()
 vis = FaceMeshVisualizer(forehead_edge=False)
 
-def prehandle_video(video_path, save_path=None, fps=24, debug=False, min_detection_confidence=0.3, use_insightface=False):
-    """
-    Detect faces in video and return face detection results.
-    For frames without detectable faces, use the previous frame's result (interpolation).
-    
-    NOTE: This function NO LONGER re-encodes the video. The original video is used directly.
-    The save_path parameter is kept for backward compatibility but ignored.
-    
-    Args:
-        video_path: Path to input video
-        save_path: DEPRECATED - kept for backward compatibility, ignored
-        fps: Frames per second (not used, kept for backward compatibility)
-        debug: Enable debug logging
-        min_detection_confidence: Face detection threshold (only used if use_insightface=True)
-        use_insightface: Use InsightFace + MediaPipe hybrid detection (default: False to match original behavior)
-    
-    Returns:
-        interpolated_frames: list of frame indices that used interpolated face results
-        face_results: list of face detection results for ALL frames (with interpolation)
-    """
-    # Use original LMKExtractor with default parameters (matches original project behavior)
-    # Only use hybrid detector if explicitly requested
-    if use_insightface and HYBRID_AVAILABLE:
-        from .media_pipe.face_detector_hybrid import HybridLMKExtractor
-        extractor = HybridLMKExtractor(
-            min_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_detection_confidence,
-            use_insightface=True,
-            insightface_det_thresh=min_detection_confidence
-        )
-        print(f"[prehandle_video] Using InsightFace + MediaPipe hybrid detector (threshold: {min_detection_confidence})")
-    else:
-        # Use original LMKExtractor with DEFAULT parameters (no custom thresholds)
-        # This matches the original project behavior exactly
-        extractor = LMKExtractor()  # No parameters = use MediaPipe defaults
-        print(f"[prehandle_video] Using original MediaPipe detector (default thresholds)")
-    
+def prehandle_video(video_path, save_path, fps=24):
     frames = imageio.get_reader(video_path)
-    
-    face_results = []  # Store face results for ALL frames
-    interpolated_frames = []  # Track frames that used interpolation
-    last_valid_result = None  # Store last valid face result for interpolation
-    total_frames = 0
-    detected_count = 0
-    
-    # Only enable debug for first few frames to avoid log spam
-    debug_limit = 10 if debug else 0
-    
+    meta = frames.get_meta_data()
+
+    # size = meta.get('size')
+    codec = meta.get('codec', 'libx264')
+    writer = imageio.get_writer(
+        save_path, 
+        fps=fps, 
+        codec=codec, 
+        macro_block_size=1,
+        quality=10
+    )
+    skip_frames_index = []
+    skip_frames_data = {}
     for i, frame in enumerate(frames):
-        total_frames += 1
         frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
         face_result = lmk_extractor(frame_bgr)
         if face_result is None:
@@ -111,11 +65,11 @@ def prehandle_video(video_path, save_path=None, fps=24, debug=False, min_detecti
     return skip_frames_index, skip_frames_data
 
 def get_video_npy(video_path):
-    """
-    Extract face landmarks from video frames.
-    Frames without detectable faces are skipped.
-    """
+
+    
+
     frames = imageio.get_reader(video_path)
+    # print(f'frames count: {len(frames)}')
 
     face_results = []
     skip_frames_index = []

@@ -8,7 +8,3 @@ decord
 tqdm
 mediapipe
 
-# Optional: InsightFace for better face detection on difficult videos
-# Uncomment the lines below to enable InsightFace hybrid detection
-# insightface>=0.7.3
-# onnxruntime-gpu>=1.16.0
