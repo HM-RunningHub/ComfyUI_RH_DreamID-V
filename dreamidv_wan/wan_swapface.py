@@ -22,6 +22,8 @@ import types
 from contextlib import contextmanager
 from functools import partial
 
+from regex import F
+
 import torch
 import torch.cuda.amp as amp
 import torch.distributed as dist
@@ -150,6 +152,117 @@ class DreamIDV:
         # else:
         # self.model.to(self.device)
         print('model loaded')
+
+    def load_image_latent_ref_ip_video_kiki(self, ori, size, device, frame_num):
+        patch_size = self.patch_size
+        vae_stride = self.vae_stride
+        ref_vae_latents = {
+            "image": [],
+            "video": [],
+            "mask": [],
+            'pose_embedding':[]
+        }
+        detected_frames = [Image.fromarray(frame) for frame in ori[0]]
+        pose_frames = [Image.fromarray(frame) for frame in ori[1]]
+        mask_frames = [Image.fromarray(frame) for frame in ori[2]]
+        ref_image_path = ori[3]
+
+        # handle detected frames
+        video_w = detected_frames[0].size[0]
+        video_h = detected_frames[0].size[1]
+    
+        detected_frames = detected_frames[:frame_num]
+
+        frames_len = (len(detected_frames)-1)//4*4 +1
+        detected_frames = detected_frames[:frames_len]
+
+        video_transform=Compose(
+            [
+                NaResize(
+                    resolution=math.sqrt(size[0] * size[1]), 
+                    downsample_only=True,
+                ),
+                DivisibleCrop((vae_stride[1] * patch_size[1], vae_stride[2] * patch_size[2])),
+                Normalize(0.5, 0.5),
+                Rearrange("t c h w -> c t h w"),
+            ]
+        )
+        
+        video_frames = video_transform(detected_frames)
+        video_vae_latent = self.vae.encode([video_frames], device)[0]    
+        ref_vae_latents["video"].append(video_vae_latent)
+        
+        #handle pose frames
+        pose_frames = pose_frames[:frames_len]
+        video_mask_transform=Compose(
+            [
+                NaResize(
+                    resolution=math.sqrt(size[0] * size[1]), 
+                    downsample_only=True,   
+                ),
+                DivisibleCrop((vae_stride[1] * patch_size[1], vae_stride[2] * patch_size[2])),
+                Rearrange("t c h w -> c t h w"),
+            ]
+        )
+        
+        video_frames = video_mask_transform(pose_frames) 
+        ref_vae_latents["pose_embedding"].append(video_frames)
+
+        # handle mask frames
+        mask_frames = mask_frames[:frames_len]
+        video_mask_transform=Compose(
+            [
+                NaResize(
+                    resolution=math.sqrt(size[0] * size[1]), 
+                    downsample_only=True,   
+                ),
+                DivisibleCrop((vae_stride[1] * patch_size[1], vae_stride[2] * patch_size[2])),
+                Rearrange("t c h w -> c t h w"),
+            ]
+        )
+        
+        video_frames = video_mask_transform(mask_frames) 
+        video_vae_latent = self.vae.encode([video_frames], device)[0]
+        ref_vae_latents["mask"].append(video_vae_latent)
+        with Image.open(ref_image_path) as img:
+            img = img.convert("RGB")
+            img_ratio = img.width / img.height
+            target_ratio = video_w / video_h
+            
+            if img_ratio > target_ratio: 
+                new_width = video_w
+                new_height = int(new_width / img_ratio)
+            else:  
+                new_height = video_h
+                new_width = int(new_height * img_ratio)
+
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            delta_w = video_w - img.size[0]
+            delta_h = video_h - img.size[1]
+            padding = (delta_w // 2, delta_h // 2, delta_w - (delta_w // 2), delta_h - (delta_h // 2))
+            new_img = ImageOps.expand(img, padding, fill=(255, 255, 255))
+
+        # Transform to tensor and normalize.
+        image_transform=Compose(
+            [
+                NaResize(
+                    resolution=math.sqrt(size[0] * size[1]), 
+                    downsample_only=True,
+                ),
+                DivisibleCrop((vae_stride[1] * patch_size[1], vae_stride[2] * patch_size[2])),
+                Normalize(0.5, 0.5),
+                Rearrange("t c h w -> c t h w"),
+            ]
+        )
+        new_img = image_transform([new_img])
+        img_vae_latent = self.vae.encode([new_img], device)[0]
+        ref_vae_latents["image"].append(img_vae_latent)
+        ref_vae_latents["image"] = torch.cat(ref_vae_latents["image"], dim=0)
+        ref_vae_latents["video"] = torch.cat(ref_vae_latents["video"], dim=0)
+        ref_vae_latents["mask"] = torch.cat(ref_vae_latents["mask"], dim=0)
+        ref_vae_latents["pose_embedding"] = torch.cat(ref_vae_latents["pose_embedding"], dim=0)
+        
+        return ref_vae_latents
 
     def load_image_latent_ref_ip_video(self,paths: str, size, device, frame_num):
         # Load size.
@@ -374,11 +487,16 @@ class DreamIDV:
         device = self.device   
         dtype = self.param_dtype
         
-        latents_ref = self.load_image_latent_ref_ip_video(paths, 
-                                                          size, 
-                                                          device,
-                                                          frame_num,
-                                                        )
+        # latents_ref = self.load_image_latent_ref_ip_video(paths, 
+        #                                                   size, 
+        #                                                   device,
+        #                                                   frame_num,
+        #                                                 )
+        latents_ref = self.load_image_latent_ref_ip_video_kiki(paths, 
+                                                              size, 
+                                                              device,
+                                                              frame_num,
+                                                            )
 
         latents_ref_video = latents_ref["video"].to(device,dtype)
 

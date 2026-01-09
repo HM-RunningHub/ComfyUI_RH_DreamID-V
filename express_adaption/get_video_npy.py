@@ -55,7 +55,7 @@ def prehandle_video(video_path, save_path, fps=24):
         frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
         face_result = lmk_extractor(frame_bgr)
         if face_result is None:
-            # print(f'frame {i} no face detected')
+            print(f'frame {i} no face detected')
             skip_frames_index.append(i)
             skip_frames_data[i] = frame
             continue
@@ -72,17 +72,42 @@ def get_video_npy(video_path):
     # print(f'frames count: {len(frames)}')
 
     face_results = []
+    skip_frames_index = []
+    skip_frames_data = {}
+    detected_frames = []
+
+    frame_width = 0
+    frame_height = 0
     
     for i, frame in enumerate(frames):
+        # if i == 0:
+        #     frame_width = frame.shape[1]
+        #     frame_height = frame.shape[0]
+        #     print(f'frame size: {frame_width}x{frame_height}')
+        #     while frame_width < 720 or frame_height < 720:
+        #         frame_width *= 2
+        #         frame_height *= 2
+        #     print(f'frame resize to: {frame_width}x{frame_height}')
+        # if frame_width != frame.shape[1]:
+        #     frame = cv2.resize(frame, (frame_width, frame_height), interpolation=cv2.INTER_CUBIC)
+
+        # print(f'frame size: {frame.shape[1]}x{frame.shape[0]}')
+
         frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
         
         face_result = lmk_extractor(frame_bgr)
-        assert face_result is not None, "Can not detect a face in the reference image."
+        # assert face_result is not None, "Can not detect a face in the reference image."
+        if face_result is None:
+            print(f'frame {i} no face detected')
+            skip_frames_index.append(i)
+            skip_frames_data[i] = frame
+            continue
         face_result['width'] = frame_bgr.shape[1]
         face_result['height'] = frame_bgr.shape[0]
         
         face_results.append(face_result)
-    return face_results
+        detected_frames.append(frame)
+    return face_results, skip_frames_index, skip_frames_data, detected_frames
     
 
 

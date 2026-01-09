@@ -52,6 +52,22 @@ def generate_pose_and_mask_videos(ref_video_path, ref_image_path):
     ]
     CORE_LANDMARK_INDICES.extend(FACE_OVAL_INDICES)
     CORE_LANDMARK_INDICES = list(set(CORE_LANDMARK_INDICES))
+
+    def save_mask_or_points_frames(landmarks_sequence, frame_size, mode='points'):
+        width, height = frame_size
+        frames = []
+        for frame_landmarks in landmarks_sequence:
+            frame_image = np.zeros((height, width, 3), dtype=np.uint8)
+            if mode == 'points':
+                for landmark in frame_landmarks:
+                    x, y = int(landmark[0]), int(landmark[1])
+                    cv2.circle(frame_image, (x, y), radius=2, color=(255, 255, 255), thickness=-1)
+            elif mode == 'mask':
+                face_oval_points = frame_landmarks.astype(np.int32)
+                cv2.fillConvexPoly(frame_image, face_oval_points, color=(255, 255, 255))
+            frames.append(frame_image)
+        return frames
+
     def save_visualization_video(landmarks_sequence, output_filename, frame_size, fps=30, mode='points'):
         width, height = frame_size
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -73,7 +89,8 @@ def generate_pose_and_mask_videos(ref_video_path, ref_image_path):
         video_writer.release()
         print("Video saving complete.")
     fps = cv2.VideoCapture(ref_video_path).get(cv2.CAP_PROP_FPS)
-    face_results = get_video_npy(ref_video_path)
+    # face_results = get_video_npy(ref_video_path)
+    face_results, skip_frames_index, skip_frames_data, detected_frames = get_video_npy(ref_video_path)
     video_name = os.path.basename(ref_video_path).split('.')[0]
     #kiki:
     # temp_dir = os.path.join(os.path.dirname(ref_video_path), 'temp_generated')
@@ -88,23 +105,26 @@ def generate_pose_and_mask_videos(ref_video_path, ref_image_path):
  
     pose_output_path = os.path.join(temp_dir, video_name + '_pose.mp4')
     core_landmarks_sequence = pose_addvis[:, CORE_LANDMARK_INDICES, :]
-    save_visualization_video(
-        landmarks_sequence=core_landmarks_sequence,
-        output_filename=pose_output_path,
-        frame_size=(width, height),
-        fps=fps,
-        mode='points'
-    )
-    mask_output_path = os.path.join(temp_dir, video_name + '_mask.mp4')
-    face_oval_sequence = pose_addvis[:, FACE_OVAL_INDICES, :]
-    save_visualization_video(
-        landmarks_sequence=face_oval_sequence,
-        output_filename=mask_output_path,
-        frame_size=(width, height),
-        fps=fps,
-        mode='mask'
-    )
-    return pose_output_path, mask_output_path
+    # save_visualization_video(
+    #     landmarks_sequence=core_landmarks_sequence,
+    #     output_filename=pose_output_path,
+    #     frame_size=(width, height),
+    #     fps=fps,
+    #     mode='points'
+    # )
+    # mask_output_path = os.path.join(temp_dir, video_name + '_mask.mp4')
+    # face_oval_sequence = pose_addvis[:, FACE_OVAL_INDICES, :]
+    # save_visualization_video(
+    #     landmarks_sequence=face_oval_sequence,
+    #     output_filename=mask_output_path,
+    #     frame_size=(width, height),
+    #     fps=fps,
+    #     mode='mask'
+    # )
+    # return pose_output_path, mask_output_path
+    pose_frames = save_mask_or_points_frames(core_landmarks_sequence, (width, height), 'points')
+    mask_frames = save_mask_or_points_frames(pose_addvis[:, FACE_OVAL_INDICES, :], (width, height), 'mask')
+    return detected_frames, pose_frames, mask_frames, skip_frames_index, skip_frames_data
 
 class RunningHub_DreamID_V_Loader:
 
@@ -279,16 +299,10 @@ class RunningHub_DreamID_V_Sampler:
         sample_guide_scale_img = 4.0
 
         pipeline = kwargs.get('pipeline')
-        print(pipeline.config)
         pipeline.config.sample_fps = kwargs.get('fps')
-        print(pipeline.config)
         sample_steps = kwargs.get('sample_steps')
         self.pbar = comfy.utils.ProgressBar(sample_steps + 1)
-        # ref_video_path = kwargs.get('video').get_stream_source()
-        video_path = kwargs.get('video').get_stream_source()
-        ref_video_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.mp4')
-        skip_frames_index, skip_frames_data = prehandle_video(video_path, ref_video_path)
-        print(f'skip_frames_index: {skip_frames_index}')
+        ref_video_path = kwargs.get('video').get_stream_source()
         
         ref_image = self.tensor_2_pil(kwargs.get('ref_image'))
         ref_image_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.png')
@@ -304,26 +318,33 @@ class RunningHub_DreamID_V_Sampler:
         frame_num = kwargs.get('frame_num')
 
         try:
-            ref_pose_path, ref_mask_path = generate_pose_and_mask_videos(
+            detected_frames, pose_frames, mask_frames, skip_frames_index, skip_frames_data = generate_pose_and_mask_videos(
                 ref_video_path=ref_video_path,
                 ref_image_path=ref_image_path
             )
         except:
             raise ValueError("Pose and mask video generation failed. no pose detected in the reference video.")
+        print(f'skip_frames_index: {skip_frames_index}')
         text_prompt = 'change face'
 
-        ref_paths = [
-            ref_video_path,
-            ref_mask_path,
+        # ref_paths = [
+        #     ref_video_path,
+        #     ref_mask_path,
+        #     ref_image_path,
+        #     ref_pose_path
+        # ]
+        ref_data = [
+            detected_frames,
+            pose_frames,
+            mask_frames,
             ref_image_path,
-            ref_pose_path
         ]
 
         self.update()
 
         generated = pipeline.generate(
             text_prompt,
-            ref_paths,
+            ref_data,
             size=size_tuple,
             frame_num=frame_num,
             shift=sample_shift,
@@ -354,7 +375,7 @@ class RunningHub_DreamID_V_Sampler:
         output_path = os.path.join(output_dir, output_filename)
         
         # self.create_video_with_audio(frames, fps, ref_video_path, output_path)
-        self.create_video_with_audio(frames, fps, video_path, output_path)
+        self.create_video_with_audio(frames, fps, ref_video_path, output_path)
         
         # Create VIDEO object
         video_obj = self.create_video_object(output_path)
@@ -411,28 +432,42 @@ class RunningHub_DreamID_V_Sampler_Test:
         # ref_video_path = kwargs.get('video').get_stream_source()
         video_path = kwargs.get('video').get_stream_source()
         ref_video_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.mp4')
-        skip_frames_index, skip_frames_data = prehandle_video(video_path, ref_video_path, fps)
-        print(f'skip_frames_index: {skip_frames_index}')
+        # skip_frames_index, skip_frames_data = prehandle_video(video_path, ref_video_path, fps)
+        # print(f'skip_frames_index: {skip_frames_index}')
         
         ref_image = self.tensor_2_pil(kwargs.get('ref_image'))
         ref_image_path = os.path.join(folder_paths.get_temp_directory(), f'dreamidv_{uuid.uuid4()}.png')
         ref_image.save(ref_image_path)
         size = kwargs.get('size')
 
-        import imageio
-        frames = imageio.get_reader(ref_video_path)
-        images = []
-        for i, frame in enumerate(frames):
-            print(frame.shape)
-            image = torch.from_numpy(np.array(frame).astype(np.float32) / 255.0)
-            images.append(image)
-        images = torch.stack(images)
-        print(images.shape)
-        frames_list = list(torch.unbind(images, dim=0))
-        for i in skip_frames_index:
-            print(skip_frames_data[i].shape)
-            frames_list.insert(i, torch.from_numpy(np.array(skip_frames_data[i]).astype(np.float32) / 255.0))
-        images = torch.stack(frames_list, dim=0)
+        detected_frames, pose_frames, mask_frames, skip_frames_index, skip_frames_data = generate_pose_and_mask_videos(
+                # ref_video_path=ref_video_path,
+                ref_video_path = video_path,
+                ref_image_path=ref_image_path
+            )
+        # print(len(detected_frames))
+        # print(len(pose_frames))
+        # print(len(mask_frames))
+        print(skip_frames_index)
+        print(len(skip_frames_data))
+
+        # frame_image = Image.fromarray(detected_frames[0])
+        # print(frame_image.size)
+
+        # import imageio
+        # frames = imageio.get_reader(ref_video_path)
+        # images = []
+        # for i, frame in enumerate(frames):
+        #     print(frame.shape)
+        #     image = torch.from_numpy(np.array(frame).astype(np.float32) / 255.0)
+        #     images.append(image)
+        # images = torch.stack(images)
+        # print(images.shape)
+        # frames_list = list(torch.unbind(images, dim=0))
+        # for i in skip_frames_index:
+        #     print(skip_frames_data[i].shape)
+        #     frames_list.insert(i, torch.from_numpy(np.array(skip_frames_data[i]).astype(np.float32) / 255.0))
+        # images = torch.stack(frames_list, dim=0)
 
         return (images, )
 
@@ -440,5 +475,5 @@ class RunningHub_DreamID_V_Sampler_Test:
 NODE_CLASS_MAPPINGS = {
     "RunningHub_DreamID-V_Loader": RunningHub_DreamID_V_Loader,
     "RunningHub_DreamID-V_Sampler": RunningHub_DreamID_V_Sampler,
-    # "RunningHub_DreamID_V_Sampler_With_Audio": RunningHub_DreamID_V_Sampler_Test,
+    "RunningHub_DreamID_V_Sampler_With_Audio": RunningHub_DreamID_V_Sampler_Test,
 }
