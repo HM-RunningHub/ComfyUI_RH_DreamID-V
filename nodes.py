@@ -475,5 +475,5 @@ class RunningHub_DreamID_V_Sampler_Test:
 NODE_CLASS_MAPPINGS = {
     "RunningHub_DreamID-V_Loader": RunningHub_DreamID_V_Loader,
     "RunningHub_DreamID-V_Sampler": RunningHub_DreamID_V_Sampler,
-    "RunningHub_DreamID_V_Sampler_With_Audio": RunningHub_DreamID_V_Sampler_Test,
+    # "RunningHub_DreamID_V_Test": RunningHub_DreamID_V_Sampler_Test,
 }
