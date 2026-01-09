@@ -307,11 +307,10 @@ class RunningHub_DreamID_V_Sampler:
         face_detection_threshold = kwargs.get('face_detection_threshold', 0.3)
         print(f'[DreamID-V] Using face detection threshold: {face_detection_threshold}')
         # Detect faces in video (no re-encoding, uses original video)
-        # For frames without faces, use interpolation from previous frames
+        # Use original MediaPipe detector with default thresholds (matches original project)
         interpolated_frames, face_results = prehandle_video(
             ref_video_path, debug=True, 
-            min_detection_confidence=face_detection_threshold,
-            use_insightface=True
+            use_insightface=False  # Use original behavior
         )
         print(f'[DreamID-V] interpolated_frames count: {len(interpolated_frames)}, face_results count: {len(face_results)}')
         
@@ -433,10 +432,10 @@ class RunningHub_DreamID_V_Sampler_Test:
         face_detection_threshold = kwargs.get('face_detection_threshold', 0.3)
         print(f'[DreamID-V Test] Using face detection threshold: {face_detection_threshold}')
         # Detect faces in video (no re-encoding)
+        # Use original MediaPipe detector with default thresholds
         interpolated_frames, face_results = prehandle_video(
             ref_video_path, debug=True,
-            min_detection_confidence=face_detection_threshold,
-            use_insightface=True
+            use_insightface=False  # Use original behavior
         )
         print(f'[DreamID-V Test] interpolated_frames count: {len(interpolated_frames)}, face_results count: {len(face_results)}')
         

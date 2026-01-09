@@ -48,7 +48,7 @@ except ImportError as e:
 lmk_extractor = LMKExtractor(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 vis = FaceMeshVisualizer(forehead_edge=False)
 
-def prehandle_video(video_path, save_path=None, fps=24, debug=False, min_detection_confidence=0.3, use_insightface=True):
+def prehandle_video(video_path, save_path=None, fps=24, debug=False, min_detection_confidence=0.3, use_insightface=False):
     """
     Detect faces in video and return face detection results.
     For frames without detectable faces, use the previous frame's result (interpolation).
@@ -61,14 +61,15 @@ def prehandle_video(video_path, save_path=None, fps=24, debug=False, min_detecti
         save_path: DEPRECATED - kept for backward compatibility, ignored
         fps: Frames per second (not used, kept for backward compatibility)
         debug: Enable debug logging
-        min_detection_confidence: Face detection threshold (0.1-1.0, lower = more detections)
-        use_insightface: Use InsightFace + MediaPipe hybrid detection (better for difficult videos)
+        min_detection_confidence: Face detection threshold (only used if use_insightface=True)
+        use_insightface: Use InsightFace + MediaPipe hybrid detection (default: False to match original behavior)
     
     Returns:
         interpolated_frames: list of frame indices that used interpolated face results
         face_results: list of face detection results for ALL frames (with interpolation)
     """
-    # Create extractor with custom threshold
+    # Use original LMKExtractor with default parameters (matches original project behavior)
+    # Only use hybrid detector if explicitly requested
     if use_insightface and HYBRID_AVAILABLE:
         from .media_pipe.face_detector_hybrid import HybridLMKExtractor
         extractor = HybridLMKExtractor(
@@ -79,11 +80,10 @@ def prehandle_video(video_path, save_path=None, fps=24, debug=False, min_detecti
         )
         print(f"[prehandle_video] Using InsightFace + MediaPipe hybrid detector (threshold: {min_detection_confidence})")
     else:
-        extractor = LMKExtractor(
-            min_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_detection_confidence
-        )
-        print(f"[prehandle_video] Using MediaPipe detector (threshold: {min_detection_confidence})")
+        # Use original LMKExtractor with DEFAULT parameters (no custom thresholds)
+        # This matches the original project behavior exactly
+        extractor = LMKExtractor()  # No parameters = use MediaPipe defaults
+        print(f"[prehandle_video] Using original MediaPipe detector (default thresholds)")
     
     frames = imageio.get_reader(video_path)
     
