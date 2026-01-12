@@ -16,9 +16,8 @@ import torch.distributed as dist
 from PIL import Image, ImageOps
 
 from .dreamidv_wan import DreamIDV
-from .dreamidv_wan.configs import WAN_CONFIGS, SIZE_CONFIGS, MAX_AREA_CONFIGS, SUPPORTED_SIZES
-from .dreamidv_wan.utils.prompt_extend import DashScopePromptExpander, QwenPromptExpander
-from .dreamidv_wan.utils.utils import cache_video, cache_image, str2bool
+from .dreamidv_wan.configs import WAN_CONFIGS, SIZE_CONFIGS
+from .dreamidv_wan_faster import DreamIDV as faster_DreamIDV
 
 import cv2
 import numpy as np
@@ -132,7 +131,7 @@ class RunningHub_DreamID_V_Loader:
     def INPUT_TYPES(s):
         return {
             "required": {
-                #"type": (["Wan2.2 I2V", "Wan2.1 T2V"], ),
+                "type": (["origin", "faster"], {"default": "origin"}),
             }
         }
 
@@ -147,13 +146,23 @@ class RunningHub_DreamID_V_Loader:
         # hardcode
         task = 'swapface'
         ckpt_dir = os.path.join(folder_paths.models_dir, 'Wan', 'Wan2.1-T2V-1.3B')
-        dreamidv_ckpt = os.path.join(folder_paths.models_dir, 'DreamID-V', 'dreamidv.pth')
         cfg = WAN_CONFIGS[task]
-        wan_swapface = DreamIDV(
-            config=cfg,
-            checkpoint_dir=ckpt_dir,
-            dreamidv_ckpt=dreamidv_ckpt,
-        )
+        if kwargs.get('type') == 'faster':
+            dreamidv_ckpt = os.path.join(folder_paths.models_dir, 'DreamID-V', 'dreamidv_faster.pth')
+            print('use faster DreamID-V')
+            wan_swapface = faster_DreamIDV(
+                config=cfg,
+                checkpoint_dir=ckpt_dir,
+                dreamidv_ckpt=dreamidv_ckpt,
+            )
+        else:
+            dreamidv_ckpt = os.path.join(folder_paths.models_dir, 'DreamID-V', 'dreamidv.pth')
+            print('use origin DreamID-V')
+            wan_swapface = DreamIDV(
+                config=cfg,
+                checkpoint_dir=ckpt_dir,
+                dreamidv_ckpt=dreamidv_ckpt,
+            )
         return (wan_swapface, )
 
 class RunningHub_DreamID_V_Sampler:
