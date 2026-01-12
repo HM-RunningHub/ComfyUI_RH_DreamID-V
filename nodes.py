@@ -131,7 +131,7 @@ class RunningHub_DreamID_V_Loader:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "type": (["origin", "faster"], {"default": "origin"}),
+                "type": (["origin", "faster"], {"default": "faster"}),
             }
         }
 
