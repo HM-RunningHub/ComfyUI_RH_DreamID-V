@@ -15,9 +15,6 @@ import torch, random
 import torch.distributed as dist
 from PIL import Image, ImageOps
 
-from .dreamidv_wan import DreamIDV
-from .dreamidv_wan.configs import WAN_CONFIGS, SIZE_CONFIGS
-from .dreamidv_wan_faster import DreamIDV as faster_DreamIDV
 
 import cv2
 import numpy as np
@@ -146,10 +143,12 @@ class RunningHub_DreamID_V_Loader:
         # hardcode
         task = 'swapface'
         ckpt_dir = os.path.join(folder_paths.models_dir, 'Wan', 'Wan2.1-T2V-1.3B')
+        from .dreamidv_wan.configs import WAN_CONFIGS
         cfg = WAN_CONFIGS[task]
         if kwargs.get('type') == 'faster':
             dreamidv_ckpt = os.path.join(folder_paths.models_dir, 'DreamID-V', 'dreamidv_faster.pth')
             print('use faster DreamID-V')
+            from .dreamidv_wan_faster import DreamIDV as faster_DreamIDV
             wan_swapface = faster_DreamIDV(
                 config=cfg,
                 checkpoint_dir=ckpt_dir,
@@ -158,6 +157,7 @@ class RunningHub_DreamID_V_Loader:
         else:
             dreamidv_ckpt = os.path.join(folder_paths.models_dir, 'DreamID-V', 'dreamidv.pth')
             print('use origin DreamID-V')
+            from .dreamidv_wan import DreamIDV
             wan_swapface = DreamIDV(
                 config=cfg,
                 checkpoint_dir=ckpt_dir,
@@ -323,6 +323,7 @@ class RunningHub_DreamID_V_Sampler:
             custom_height = kwargs.get('custom_height', 480)
             size_tuple = (custom_width, custom_height)
         else:
+            from .dreamidv_wan.configs import SIZE_CONFIGS
             size_tuple = SIZE_CONFIGS[size]
         seed = kwargs.get('seed') ^ (2 ** 32)
         frame_num = kwargs.get('frame_num')
